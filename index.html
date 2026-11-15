@@ -60,6 +60,7 @@
       <button onclick="switchTab('sip')" id="tab-sip" class="shrink-0 py-3 px-2.5 sm:px-3 text-slate-400">SIP</button>
       <button onclick="switchTab('deploy')" id="tab-deploy" class="shrink-0 py-3 px-2.5 sm:px-3 text-slate-400">Deploy</button>
       <button onclick="switchTab('signals')" id="tab-signals" class="shrink-0 py-3 px-2.5 sm:px-3 font-semibold text-green-400">Signals</button>
+      <button onclick="switchTab('history')" id="tab-history" class="shrink-0 py-3 px-2.5 sm:px-3 text-slate-400">History</button>
       <button onclick="switchTab('insights')" id="tab-insights" class="shrink-0 py-3 px-2.5 sm:px-3 text-slate-400">Insights</button>
     </div>
   </nav>
@@ -302,6 +303,30 @@
       </div>
     </section>
 
+
+    <!-- HISTORY -->
+    <section id="panel-history" class="hidden space-y-4">
+      <div class="flex gap-2 text-sm">
+        <button onclick="setHistoryFilter('all')" id="hf-all" class="btn px-3 py-1.5 rounded-lg bg-green-600 text-white">All</button>
+        <button onclick="setHistoryFilter('deploy')" id="hf-deploy" class="btn px-3 py-1.5 rounded-lg bg-slate-700 text-slate-300">Deploys</button>
+        <button onclick="setHistoryFilter('sip')" id="hf-sip" class="btn px-3 py-1.5 rounded-lg bg-slate-700 text-slate-300">SIP</button>
+        <button onclick="setHistoryFilter('reserve')" id="hf-reserve" class="btn px-3 py-1.5 rounded-lg bg-slate-700 text-slate-300">Reserve</button>
+      </div>
+
+      <div class="card p-4">
+        <div class="flex justify-between items-center mb-3">
+          <h3 class="font-semibold">Transaction Log</h3>
+          <button onclick="openAddTransaction()" class="btn text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg">+ Add</button>
+        </div>
+        <div id="history-tx-list" class="space-y-2 max-h-[50vh] overflow-y-auto text-sm"></div>
+      </div>
+
+      <div class="card p-4">
+        <h3 class="font-semibold mb-3">Monthly SIP History</h3>
+        <div id="history-sip-list" class="space-y-2 max-h-64 overflow-y-auto text-sm"></div>
+      </div>
+    </section>
+
     <!-- INSIGHTS -->
     <section id="panel-insights" class="hidden space-y-4">
       <div class="card p-4">
@@ -339,8 +364,12 @@
         <input type="text" id="fund-name" class="w-full rounded-lg px-3 py-2 mt-1 text-sm">
       </div>
       <div>
-        <label class="text-xs text-slate-400">Scheme Code (for NAV fetch)</label>
-        <input type="text" id="fund-code" class="w-full rounded-lg px-3 py-2 mt-1 text-sm" placeholder="e.g. 122639">
+        <label class="text-xs text-slate-400">Scheme Code (AMFI NAV)</label>
+        <input type="text" id="fund-code" class="w-full rounded-lg px-3 py-2 mt-1 text-sm" placeholder="e.g. 148927 for MAFANG">
+      </div>
+      <div>
+        <label class="text-xs text-slate-400">NSE Ticker (for live market price – ETFs)</label>
+        <input type="text" id="fund-ticker" class="w-full rounded-lg px-3 py-2 mt-1 text-sm" placeholder="e.g. MAFANG for exchange price">
       </div>
       <div class="grid grid-cols-2 gap-3">
         <div>
@@ -361,6 +390,46 @@
         <input type="number" id="fund-avg" step="0.01" class="w-full rounded-lg px-3 py-2 mt-1 text-sm" placeholder="0">
       </div>
       <button onclick="saveFund()" class="btn w-full bg-green-600 text-white py-3 rounded-lg font-medium">Save Fund</button>
+    </div>
+  </div>
+
+
+  <!-- Edit / Add Transaction Modal -->
+  <div id="txModal" class="fixed inset-0 z-50 hidden modal bg-black/60 flex items-end sm:items-center justify-center p-4">
+    <div class="card w-full max-w-md p-5 space-y-3 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center">
+        <h3 class="text-lg font-semibold" id="tx-modal-title">Edit Transaction</h3>
+        <button onclick="closeTxModal()" class="text-slate-400 text-2xl leading-none">&times;</button>
+      </div>
+      <input type="hidden" id="tx-edit-id">
+      <div>
+        <label class="text-xs text-slate-400">Type</label>
+        <select id="tx-type" class="w-full rounded-lg px-3 py-2 mt-1 text-sm">
+          <option value="sip">SIP</option>
+          <option value="deploy">Deploy (from Reserve)</option>
+          <option value="reserve">To Reserve</option>
+          <option value="manual">Manual / Other</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-xs text-slate-400">Amount (₹)</label>
+        <input type="number" id="tx-amount" class="w-full rounded-lg px-3 py-2 mt-1 text-sm">
+      </div>
+      <div>
+        <label class="text-xs text-slate-400">Fund (optional)</label>
+        <select id="tx-fund" class="w-full rounded-lg px-3 py-2 mt-1 text-sm">
+          <option value="">— None —</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-xs text-slate-400">Date</label>
+        <input type="datetime-local" id="tx-date" class="w-full rounded-lg px-3 py-2 mt-1 text-sm">
+      </div>
+      <div>
+        <label class="text-xs text-slate-400">Note</label>
+        <input type="text" id="tx-note" class="w-full rounded-lg px-3 py-2 mt-1 text-sm" placeholder="Optional note">
+      </div>
+      <button onclick="saveTransaction()" class="btn w-full bg-green-600 text-white py-3 rounded-lg font-medium">Save</button>
     </div>
   </div>
 
@@ -398,6 +467,9 @@
       if (!state.nifty) state.nifty = { current: 0, monthHigh: 0, lastUpdated: null };
       if (state.nifty.customUrl === undefined) state.nifty.customUrl = '';
       if (state.nifty.jsonPath === undefined) state.nifty.jsonPath = 'nifty.level';
+      if (!state.transactions) state.transactions = [];
+      if (!state.sipHistory) state.sipHistory = [];
+      if (!state.activity) state.activity = [];
       // Ensure month high reset logic can run
       checkMonthReset();
     }
@@ -431,7 +503,7 @@
       return (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
     }
     function switchTab(name) {
-      ['dashboard','funds','sip','deploy','signals','insights'].forEach(t => {
+      ['dashboard','funds','sip','deploy','signals','history','insights'].forEach(t => {
         document.getElementById('panel-' + t).classList.toggle('hidden', t !== name);
         const tab = document.getElementById('tab-' + t);
         if (tab) {
@@ -445,6 +517,7 @@
       if (name === 'funds') renderFunds();
       if (name === 'sip') renderSip();
       if (name === 'signals') renderSignals();
+      if (name === 'history') renderHistory();
     }
 
     // Shared fetch helper (must be above searchFunds / fetchNav)
@@ -480,7 +553,7 @@
     function openAddFund() {
       editingFundId = null;
       document.getElementById('modal-title').textContent = 'Add Fund';
-      ['fund-name','fund-code','fund-alloc','fund-dip','fund-units','fund-avg','fund-search'].forEach(id => document.getElementById(id).value = '');
+      ['fund-name','fund-code','fund-ticker','fund-alloc','fund-dip','fund-units','fund-avg','fund-search'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
       document.getElementById('search-results').innerHTML = '';
       document.getElementById('fundModal').classList.remove('hidden');
     }
@@ -491,6 +564,8 @@
       document.getElementById('modal-title').textContent = 'Edit Fund';
       document.getElementById('fund-name').value = f.name;
       document.getElementById('fund-code').value = f.code || '';
+      const tickEl = document.getElementById('fund-ticker');
+      if (tickEl) tickEl.value = f.ticker || '';
       document.getElementById('fund-alloc').value = f.alloc;
       document.getElementById('fund-dip').value = f.dipThreshold || 5;
       document.getElementById('fund-units').value = f.units || '';
@@ -545,6 +620,7 @@
     function saveFund() {
       const name = document.getElementById('fund-name').value.trim();
       const code = document.getElementById('fund-code').value.trim();
+      const ticker = (document.getElementById('fund-ticker')?.value || '').trim().toUpperCase();
       const alloc = parseFloat(document.getElementById('fund-alloc').value) || 0;
       const dip = parseFloat(document.getElementById('fund-dip').value) || 5;
       const units = parseFloat(document.getElementById('fund-units').value) || 0;
@@ -552,11 +628,11 @@
       if (!name) return toast('Name required');
       if (editingFundId) {
         const f = state.funds.find(x => x.id === editingFundId);
-        Object.assign(f, { name, code, alloc, dipThreshold: dip, units, avgNav: avg });
+        Object.assign(f, { name, code, ticker, alloc, dipThreshold: dip, units, avgNav: avg });
       } else {
         state.funds.push({
           id: 'f' + Date.now(),
-          name, code, alloc, dipThreshold: dip,
+          name, code, ticker, alloc, dipThreshold: dip,
           units, avgNav: avg,
           lastNav: avg || 0,
           monthHigh: avg || 0,
@@ -571,7 +647,8 @@
       renderFunds();
       renderDashboard();
       toast('Fund saved');
-      if (code) fetchNav(code, true);
+      if (ticker) fetchMarketPrice(ticker, true);
+      else if (code) fetchNav(code, true);
     }
     function deleteFund(id) {
       if (!confirm('Delete this fund?')) return;
@@ -639,17 +716,72 @@
       }
     }
 
+
+    async function fetchMarketPrice(ticker, silent = false) {
+      if (!ticker) return;
+      try {
+        const url = 'https://proxy.cors.dev/https://query1.finance.yahoo.com/v8/finance/chart/' +
+          encodeURIComponent(ticker.includes('.') ? ticker : ticker + '.NS') +
+          '?interval=1d&range=2mo';
+        const res = await fetch(url, { mode: 'cors' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const json = await res.json();
+        const result = json?.chart?.result?.[0];
+        if (!result) throw new Error('No data');
+        const meta = result.meta || {};
+        const q = result.indicators?.quote?.[0];
+        const closes = (q?.close || []).filter(x => x != null);
+        if (!closes.length && !meta.regularMarketPrice) throw new Error('No price');
+        const price = meta.regularMarketPrice || closes[closes.length - 1];
+        const fund = state.funds.find(f =>
+          (f.ticker && f.ticker.toUpperCase() === ticker.toUpperCase().replace('.NS','')) ||
+          (f.ticker && f.ticker.toUpperCase() === ticker.toUpperCase())
+        );
+        if (fund) {
+          fund.lastNav = price;
+          // month high from recent closes
+          const now = new Date();
+          const y = now.getFullYear(), m = now.getMonth();
+          let monthHigh = price;
+          const ts = result.timestamp || [];
+          if (q?.high && ts.length) {
+            for (let i = 0; i < ts.length; i++) {
+              const d = new Date(ts[i] * 1000);
+              if (d.getFullYear() === y && d.getMonth() === m && q.high[i] != null) {
+                if (q.high[i] > monthHigh) monthHigh = q.high[i];
+              }
+            }
+          }
+          fund.monthHigh = Math.max(fund.monthHigh || 0, monthHigh, price);
+          fund.history = closes.slice(-30).map((c, i) => ({ date: String(i), nav: c }));
+          fund.lastNavDate = new Date().toLocaleDateString('en-IN');
+          save();
+          if (!silent) toast(`${fund.name}: Market ₹${price.toFixed(2)}`);
+          renderFunds();
+          renderDashboard();
+          renderDeploy();
+        }
+        return price;
+      } catch (e) {
+        console.warn('Market price error', e);
+        if (!silent) toast('Market price fetch failed for ' + ticker);
+      }
+    }
+
     async function refreshAllNavs() {
-      if (!state.funds.some(f => f.code)) return toast('No funds with scheme code');
-      toast('Refreshing NAVs + Month Highs…');
+      if (!state.funds.some(f => f.code || f.ticker)) return toast('No funds with code or ticker');
+      toast('Refreshing prices…');
       let ok = 0;
       for (const f of state.funds) {
-        if (f.code) {
+        if (f.ticker) {
+          const n = await fetchMarketPrice(f.ticker, true);
+          if (n) ok++;
+        } else if (f.code) {
           const n = await fetchNav(f.code, true);
           if (n) ok++;
         }
       }
-      toast(ok ? `Updated ${ok} fund(s) (NAV + Month High)` : 'Could not reach NAV API. Enter manually.');
+      toast(ok ? `Updated ${ok} fund(s)` : 'Could not reach price API. Enter manually.');
       renderAll();
     }
 
@@ -657,7 +789,11 @@
     async function refreshMonthHigh(fundId) {
       const f = state.funds.find(x => x.id === fundId);
       if (!f) return;
-      if (f.code) {
+      if (f.ticker) {
+        toast('Updating month high…');
+        await fetchMarketPrice(f.ticker, true);
+        toast(`${f.name}: Month High ₹${(f.monthHigh || 0).toFixed(2)}`);
+      } else if (f.code) {
         toast('Updating month high…');
         await fetchNav(f.code, true);
         toast(`${f.name}: Month High ₹${(f.monthHigh || 0).toFixed(2)}`);
@@ -1178,6 +1314,7 @@
         allocated += share;
         details.push({ name: f.name, amount: share, units });
         state.transactions.push({
+          id: 'tx' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
           date: new Date().toISOString(),
           type: 'sip',
           amount: share,
@@ -1189,6 +1326,7 @@
       if (remaining > 0.5) {
         state.reserve += remaining;
         state.transactions.push({
+          id: 'tx' + Date.now() + '_res',
           date: new Date().toISOString(),
           type: 'reserve',
           amount: remaining,
@@ -1196,6 +1334,7 @@
         });
       }
       state.sipHistory.unshift({
+        id: 'sip' + Date.now(),
         date: new Date().toISOString(),
         amount: amt,
         allocated,
@@ -1234,6 +1373,7 @@
       f.avgNav = (prevCost + amt) / f.units;
       state.reserve -= amt;
       state.transactions.push({
+        id: 'tx' + Date.now() + '_dep',
         date: new Date().toISOString(),
         type: 'deploy',
         amount: amt,
@@ -1332,10 +1472,10 @@
           <div class="flex justify-between items-start gap-2">
             <div class="flex-1 min-w-0">
               <p class="font-medium truncate">${f.name}</p>
-              <p class="text-xs text-slate-400">Code: ${f.code || '—'} · Target Alloc: <b class="text-slate-300">${f.alloc}%</b></p>
+              <p class="text-xs text-slate-400">${f.ticker ? 'Ticker: '+f.ticker : 'Code: '+(f.code||'—')} · Alloc: <b class="text-slate-300">${f.alloc}%</b></p>
             </div>
             <div class="flex gap-1 flex-wrap justify-end">
-              <button onclick="fetchNav('${f.code || ''}')" class="btn text-xs bg-slate-700 px-2 py-1 rounded" title="Fetch NAV + Month High">↻ NAV</button>
+              <button onclick="${f.ticker ? `fetchMarketPrice('${f.ticker}')` : `fetchNav('${f.code || ''}')`}" class="btn text-xs bg-slate-700 px-2 py-1 rounded" title="Fetch live price">↻ Price</button>
               <button onclick="refreshMonthHigh('${f.id}')" class="btn text-xs bg-slate-700 px-2 py-1 rounded" title="Refresh Month High">↻ High</button>
               <button onclick="setThreshold('${f.id}')" class="btn text-xs bg-slate-700 px-2 py-1 rounded" title="Set dip threshold %">Thr%</button>
               <button onclick="editFund('${f.id}')" class="btn text-xs bg-slate-700 px-2 py-1 rounded">Edit</button>
@@ -1522,6 +1662,245 @@
       renderSip();
       renderDeploy();
     }
+
+
+    // ========== HISTORY / TRANSACTIONS ==========
+    let historyFilter = 'all';
+    let editingTxId = null;
+
+    function ensureTxIds() {
+      let changed = false;
+      (state.transactions || []).forEach((t, i) => {
+        if (!t.id) { t.id = 'tx' + Date.now() + '_' + i; changed = true; }
+      });
+      (state.sipHistory || []).forEach((h, i) => {
+        if (!h.id) { h.id = 'sip' + Date.now() + '_' + i; changed = true; }
+      });
+      if (changed) save();
+    }
+
+    function setHistoryFilter(f) {
+      historyFilter = f;
+      ['all','deploy','sip','reserve'].forEach(x => {
+        const el = document.getElementById('hf-' + x);
+        if (!el) return;
+        el.className = 'btn px-3 py-1.5 rounded-lg ' + (x === f ? 'bg-green-600 text-white' : 'bg-slate-700 text-slate-300');
+      });
+      renderHistory();
+    }
+
+    function renderHistory() {
+      ensureTxIds();
+      const box = document.getElementById('history-tx-list');
+      if (!box) return;
+      let list = (state.transactions || []).slice().sort((a, b) => new Date(b.date) - new Date(a.date));
+      if (historyFilter !== 'all') {
+        list = list.filter(t => t.type === historyFilter || (historyFilter === 'deploy' && t.type === 'deploy'));
+      }
+      if (!list.length) {
+        box.innerHTML = '<p class="text-slate-500 py-4 text-center">No transactions yet</p>';
+      } else {
+        box.innerHTML = list.map(t => {
+          const fund = t.fundId ? state.funds.find(f => f.id === t.fundId) : null;
+          const d = new Date(t.date);
+          const ds = isNaN(d) ? t.date : d.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+          const typeColor = t.type === 'deploy' ? 'text-amber-400' : t.type === 'sip' ? 'text-green-400' : t.type === 'reserve' ? 'text-blue-400' : 'text-slate-300';
+          return `<div class="border border-slate-700 rounded-lg p-3">
+            <div class="flex justify-between items-start gap-2">
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-medium uppercase ${typeColor}">${t.type || 'tx'}</span>
+                  <span class="font-semibold">${fmt(t.amount)}</span>
+                </div>
+                <p class="text-xs text-slate-400 mt-0.5">${ds}</p>
+                ${fund ? `<p class="text-xs text-slate-300 truncate">${fund.name}</p>` : ''}
+                ${t.note ? `<p class="text-xs text-slate-500 mt-0.5">${t.note}</p>` : ''}
+              </div>
+              <div class="flex gap-1 shrink-0">
+                <button onclick="editTransaction('${t.id}')" class="btn text-xs bg-slate-700 px-2 py-1 rounded">Edit</button>
+                <button onclick="deleteTransaction('${t.id}')" class="btn text-xs bg-red-900/50 text-red-300 px-2 py-1 rounded">Del</button>
+              </div>
+            </div>
+          </div>`;
+        }).join('');
+      }
+
+      // SIP monthly history
+      const sipBox = document.getElementById('history-sip-list');
+      if (!sipBox) return;
+      const sips = (state.sipHistory || []).slice();
+      if (!sips.length) {
+        sipBox.innerHTML = '<p class="text-slate-500 py-2 text-center">No SIP runs yet</p>';
+      } else {
+        sipBox.innerHTML = sips.map(h => {
+          const d = new Date(h.date);
+          const ds = isNaN(d) ? h.date : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+          return `<div class="border border-slate-700 rounded-lg p-3">
+            <div class="flex justify-between items-start">
+              <div>
+                <p class="font-medium">${fmt(h.amount)} SIP</p>
+                <p class="text-xs text-slate-400">${ds}</p>
+                <p class="text-xs text-slate-500">Allocated ${fmt(h.allocated || 0)} · Reserve ${fmt(h.toReserve || 0)}</p>
+              </div>
+              <div class="flex gap-1">
+                <button onclick="editSipHistory('${h.id}')" class="btn text-xs bg-slate-700 px-2 py-1 rounded">Edit</button>
+                <button onclick="deleteSipHistory('${h.id}')" class="btn text-xs bg-red-900/50 text-red-300 px-2 py-1 rounded">Del</button>
+              </div>
+            </div>
+          </div>`;
+        }).join('');
+      }
+    }
+
+    function openAddTransaction() {
+      editingTxId = null;
+      document.getElementById('tx-modal-title').textContent = 'Add Transaction';
+      document.getElementById('tx-edit-id').value = '';
+      document.getElementById('tx-type').value = 'manual';
+      document.getElementById('tx-amount').value = '';
+      document.getElementById('tx-note').value = '';
+      const now = new Date();
+      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+      document.getElementById('tx-date').value = now.toISOString().slice(0, 16);
+      fillTxFundSelect();
+      document.getElementById('txModal').classList.remove('hidden');
+    }
+
+    function editTransaction(id) {
+      const t = (state.transactions || []).find(x => x.id === id);
+      if (!t) return toast('Transaction not found');
+      editingTxId = id;
+      document.getElementById('tx-modal-title').textContent = 'Edit Transaction';
+      document.getElementById('tx-edit-id').value = id;
+      document.getElementById('tx-type').value = t.type || 'manual';
+      document.getElementById('tx-amount').value = t.amount || '';
+      document.getElementById('tx-note').value = t.note || '';
+      fillTxFundSelect(t.fundId);
+      const d = new Date(t.date);
+      if (!isNaN(d)) {
+        d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+        document.getElementById('tx-date').value = d.toISOString().slice(0, 16);
+      }
+      document.getElementById('txModal').classList.remove('hidden');
+    }
+
+    function fillTxFundSelect(selected) {
+      const sel = document.getElementById('tx-fund');
+      sel.innerHTML = '<option value="">— None —</option>' +
+        state.funds.map(f => `<option value="${f.id}" ${f.id === selected ? 'selected' : ''}>${f.name}</option>`).join('');
+    }
+
+    function closeTxModal() {
+      document.getElementById('txModal').classList.add('hidden');
+      editingTxId = null;
+    }
+
+    function saveTransaction() {
+      const type = document.getElementById('tx-type').value;
+      const amount = parseFloat(document.getElementById('tx-amount').value);
+      const fundId = document.getElementById('tx-fund').value || null;
+      const note = document.getElementById('tx-note').value.trim();
+      const dateVal = document.getElementById('tx-date').value;
+      if (!amount || amount <= 0) return toast('Enter a valid amount');
+      const date = dateVal ? new Date(dateVal).toISOString() : new Date().toISOString();
+
+      if (editingTxId) {
+        const t = state.transactions.find(x => x.id === editingTxId);
+        if (t) {
+          // Adjust reserve if deploy/reserve type changed in a simple way
+          t.type = type;
+          t.amount = amount;
+          t.fundId = fundId;
+          t.note = note;
+          t.date = date;
+        }
+      } else {
+        state.transactions.unshift({
+          id: 'tx' + Date.now(),
+          type, amount, fundId, note, date
+        });
+        // Side effects for new entries
+        if (type === 'reserve') {
+          state.reserve = (state.reserve || 0) + amount;
+        } else if (type === 'deploy') {
+          if (amount > (state.reserve || 0) + 0.01) {
+            // still allow but warn
+            toast('Warning: amount > current Reserve');
+          }
+          state.reserve = Math.max(0, (state.reserve || 0) - amount);
+          if (fundId) {
+            const f = state.funds.find(x => x.id === fundId);
+            if (f) {
+              const nav = f.lastNav || f.avgNav || 1;
+              const units = amount / nav;
+              const prevCost = (f.avgNav || 0) * (f.units || 0);
+              f.units = (f.units || 0) + units;
+              f.avgNav = f.units ? (prevCost + amount) / f.units : nav;
+            }
+          }
+        }
+        state.activity.unshift({
+          date,
+          text: `${type.toUpperCase()} ₹${amount.toLocaleString('en-IN')}${fundId ? ' → fund' : ''}`
+        });
+      }
+      save();
+      closeTxModal();
+      renderHistory();
+      renderDashboard();
+      renderDeploy();
+      toast('Transaction saved');
+    }
+
+    function deleteTransaction(id) {
+      const t = (state.transactions || []).find(x => x.id === id);
+      if (!t) return;
+      if (!confirm(`Delete this ${t.type} of ${fmt(t.amount)}?`)) return;
+
+      // Reverse simple reserve impact
+      if (t.type === 'reserve') {
+        state.reserve = Math.max(0, (state.reserve || 0) - (t.amount || 0));
+      } else if (t.type === 'deploy') {
+        state.reserve = (state.reserve || 0) + (t.amount || 0);
+        // Note: we do not auto-reverse units on fund (too risky without full lot tracking)
+      }
+      state.transactions = state.transactions.filter(x => x.id !== id);
+      save();
+      renderHistory();
+      renderDashboard();
+      renderDeploy();
+      toast('Transaction deleted');
+    }
+
+    function editSipHistory(id) {
+      const h = (state.sipHistory || []).find(x => x.id === id);
+      if (!h) return;
+      const amt = prompt('SIP total amount (₹)', h.amount);
+      if (amt === null) return;
+      const allocated = prompt('Amount allocated to funds (₹)', h.allocated);
+      if (allocated === null) return;
+      const toReserve = prompt('Amount to Reserve (₹)', h.toReserve);
+      if (toReserve === null) return;
+      h.amount = parseFloat(amt) || 0;
+      h.allocated = parseFloat(allocated) || 0;
+      h.toReserve = parseFloat(toReserve) || 0;
+      save();
+      renderHistory();
+      renderSip();
+      toast('SIP history updated');
+    }
+
+    function deleteSipHistory(id) {
+      const h = (state.sipHistory || []).find(x => x.id === id);
+      if (!h) return;
+      if (!confirm(`Delete SIP record of ${fmt(h.amount)} on ${new Date(h.date).toLocaleDateString('en-IN')}?`)) return;
+      state.sipHistory = state.sipHistory.filter(x => x.id !== id);
+      save();
+      renderHistory();
+      renderSip();
+      toast('SIP history deleted');
+    }
+
 
     // ========== BACKUP / RESTORE ==========
     function exportData() {
