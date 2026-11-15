@@ -82,8 +82,27 @@
           <p class="text-xl font-bold" id="dash-pnl">₹0</p>
         </div>
         <div class="card p-4">
-          <p class="text-xs text-slate-400">Reserve Fund</p>
-          <p class="text-xl font-bold text-amber-400" id="dash-reserve">₹0</p>
+          <p class="text-xs text-slate-400">Available (Regular+Dip)</p>
+          <p class="text-xl font-bold text-cyan-400" id="dash-available">₹0</p>
+        </div>
+        <div class="card p-4 border border-blue-500/30">
+          <p class="text-xs text-slate-400">Regular Fund</p>
+          <p class="text-lg font-bold text-blue-400" id="dash-regular">₹0</p>
+          <p class="text-[10px] text-slate-500">SIP / manual invest</p>
+        </div>
+        <div class="card p-4 border border-amber-500/30">
+          <p class="text-xs text-slate-400">Dip Reserve</p>
+          <p class="text-lg font-bold text-amber-400" id="dash-reserve">₹0</p>
+          <p class="text-[10px] text-slate-500">For buy-on-dip</p>
+        </div>
+      </div>
+
+      <div class="card p-4">
+        <h3 class="font-semibold mb-2 text-sm">Cash actions</h3>
+        <div class="flex flex-wrap gap-2">
+          <button onclick="addToRegular()" class="btn flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm">+ Add to Regular</button>
+          <button onclick="transferRegularToReserve()" class="btn flex-1 bg-amber-600 text-black py-2 rounded-lg text-sm">Regular → Dip</button>
+          <button onclick="monthEndTransfer()" class="btn w-full bg-slate-700 text-slate-200 py-2 rounded-lg text-sm">Month-end: move remaining Regular → Dip</button>
         </div>
       </div>
 
@@ -197,7 +216,7 @@
 
       <div class="card p-4">
         <h3 class="font-semibold mb-2">Execute This Month's SIP</h3>
-        <p class="text-xs text-slate-400 mb-3">Allocate according to fund % targets. Remaining goes to Reserve.</p>
+        <p class="text-xs text-slate-400 mb-3">Taken from <b>Regular Fund</b>. Unallocated % goes to Dip Reserve. Month-end: move leftover Regular → Dip.</p>
         <button onclick="executeSip()" class="btn w-full bg-blue-600 text-white py-3 rounded-lg font-medium">Run SIP Now</button>
       </div>
 
@@ -211,7 +230,8 @@
     <section id="panel-deploy" class="hidden space-y-4">
       <div class="card p-4 border border-amber-500/30">
         <h3 class="font-semibold text-amber-400 mb-2">Nifty Dip Deployment</h3>
-        <p class="text-xs text-slate-400 mb-3">Deploy Reserve when Nifty falls 2.5% / 5% from month high.</p>
+        <p class="text-xs text-slate-400 mb-3">Deploy from <b>Dip Reserve + Regular</b> when Nifty falls 2.5% / 5% from month high.</p>
+        <p class="text-xs text-slate-500 mb-2" id="deploy-cash-status"></p>
         <div id="deploy-nifty-status" class="mb-3 text-sm"></div>
         <div class="flex gap-2 mb-3">
           <input type="number" id="deploy-amount" placeholder="Amount to deploy (₹)" class="flex-1 rounded-lg px-3 py-2 text-sm">
@@ -441,7 +461,8 @@
     const STORAGE_KEY = 'smartfund_v1';
     let state = {
       funds: [],          // {id, name, code, alloc%, dipThreshold%, units, avgNav, monthHigh, lastNav, history:[]}
-      reserve: 0,
+      regular: 0,       // Regular fund – SIP / manual invest pool
+      reserve: 0,       // Dip reserve – for buy-on-dip deployments
       sip: { amount: 0, day: 5 },
       nifty: {
         current: 0,
@@ -470,6 +491,8 @@
       if (!state.transactions) state.transactions = [];
       if (!state.sipHistory) state.sipHistory = [];
       if (!state.activity) state.activity = [];
+      if (state.regular === undefined) state.regular = 0;
+      if (state.reserve === undefined) state.reserve = 0;
       // Ensure month high reset logic can run
       checkMonthReset();
     }
@@ -1285,6 +1308,76 @@
       // empty state already in HTML
     }
 
+
+    // ========== CASH: REGULAR + DIP RESERVE ==========
+    function totalAvailable() {
+      return (state.regular || 0) + (state.reserve || 0);
+    }
+
+    function addToRegular() {
+      const val = prompt('Add amount to Regular Fund (₹)', '');
+      if (val === null) return;
+      const amt = parseFloat(val);
+      if (!amt || amt <= 0) return toast('Invalid amount');
+      state.regular = (state.regular || 0) + amt;
+      state.transactions.unshift({
+        id: 'tx' + Date.now(),
+        date: new Date().toISOString(),
+        type: 'manual',
+        amount: amt,
+        note: 'Added to Regular Fund'
+      });
+      state.activity.unshift({ date: new Date().toISOString(), text: `+₹${amt.toLocaleString('en-IN')} → Regular Fund` });
+      save();
+      renderDashboard();
+      renderHistory();
+      toast(`Regular Fund: ${fmt(state.regular)}`);
+    }
+
+    function transferRegularToReserve() {
+      const max = state.regular || 0;
+      if (max <= 0) return toast('Regular Fund is empty');
+      const val = prompt(`Transfer from Regular → Dip Reserve\nAvailable in Regular: ₹${max.toLocaleString('en-IN')}`, String(max));
+      if (val === null) return;
+      const amt = parseFloat(val);
+      if (!amt || amt <= 0) return toast('Invalid amount');
+      if (amt > max + 0.01) return toast('Not enough in Regular Fund');
+      state.regular -= amt;
+      state.reserve = (state.reserve || 0) + amt;
+      state.transactions.unshift({
+        id: 'tx' + Date.now(),
+        date: new Date().toISOString(),
+        type: 'reserve',
+        amount: amt,
+        note: 'Transferred Regular → Dip Reserve'
+      });
+      state.activity.unshift({ date: new Date().toISOString(), text: `₹${amt.toLocaleString('en-IN')} Regular → Dip Reserve` });
+      save();
+      renderDashboard();
+      renderHistory();
+      toast(`Moved ${fmt(amt)} to Dip Reserve`);
+    }
+
+    function monthEndTransfer() {
+      const rem = state.regular || 0;
+      if (rem <= 0) return toast('No remaining balance in Regular Fund');
+      if (!confirm(`Move remaining Regular Fund ${fmt(rem)} to Dip Reserve?`)) return;
+      state.reserve = (state.reserve || 0) + rem;
+      state.regular = 0;
+      state.transactions.unshift({
+        id: 'tx' + Date.now(),
+        date: new Date().toISOString(),
+        type: 'reserve',
+        amount: rem,
+        note: 'Month-end auto: remaining Regular → Dip Reserve'
+      });
+      state.activity.unshift({ date: new Date().toISOString(), text: `Month-end: ₹${rem.toLocaleString('en-IN')} → Dip Reserve` });
+      save();
+      renderDashboard();
+      renderHistory();
+      toast('Month-end transfer done');
+    }
+
     // ========== SIP ==========
     function saveSipConfig() {
       state.sip.amount = parseFloat(document.getElementById('sip-amount').value) || 0;
@@ -1299,16 +1392,20 @@
       const totalAlloc = state.funds.reduce((s, f) => s + (f.alloc || 0), 0);
       if (totalAlloc <= 0) return toast('Set allocation % on funds');
 
+      // Prefer taking SIP from Regular Fund; if short, still allow (user may top up)
+      if ((state.regular || 0) < amt - 0.01) {
+        const need = amt - (state.regular || 0);
+        if (!confirm(`Regular Fund has only ${fmt(state.regular)}. SIP needs ${fmt(amt)} (short ${fmt(need)}). Continue anyway?`)) return;
+      }
+
       let allocated = 0;
       const details = [];
       state.funds.forEach(f => {
         const share = (f.alloc / totalAlloc) * amt;
         if (share < 1) return;
-        // Convert rupees to units at current NAV
         const nav = f.lastNav || f.avgNav || 1;
         const units = share / nav;
         f.units = (f.units || 0) + units;
-        // Update average
         const prevCost = (f.avgNav || 0) * ((f.units || 0) - units);
         f.avgNav = (prevCost + share) / f.units;
         allocated += share;
@@ -1322,15 +1419,19 @@
           note: `SIP units ${units.toFixed(3)} @ ₹${nav.toFixed(2)}`
         });
       });
+      // Deduct from Regular (not more than available)
+      const fromRegular = Math.min(state.regular || 0, amt);
+      state.regular = Math.max(0, (state.regular || 0) - fromRegular);
+      // Unallocated portion of SIP amount → Dip Reserve
       const remaining = amt - allocated;
       if (remaining > 0.5) {
-        state.reserve += remaining;
+        state.reserve = (state.reserve || 0) + remaining;
         state.transactions.push({
           id: 'tx' + Date.now() + '_res',
           date: new Date().toISOString(),
           type: 'reserve',
           amount: remaining,
-          note: 'SIP remainder to Reserve'
+          note: 'SIP unallocated remainder → Dip Reserve'
         });
       }
       state.sipHistory.unshift({
@@ -1343,19 +1444,19 @@
       });
       state.activity.unshift({
         date: new Date().toISOString(),
-        text: `SIP ₹${amt.toLocaleString('en-IN')} executed · ₹${remaining.toFixed(0)} → Reserve`
+        text: `SIP ₹${amt.toLocaleString('en-IN')} · from Regular · ₹${remaining.toFixed(0)} → Dip Reserve`
       });
       save();
       renderAll();
-      toast(`SIP done. ₹${remaining.toFixed(0)} moved to Reserve`);
+      toast(`SIP done. Regular left: ${fmt(state.regular)}`);
     }
 
     // ========== DEPLOY ==========
     function deployFromReserve() {
       const amt = parseFloat(document.getElementById('deploy-amount').value);
       if (!amt || amt <= 0) return toast('Enter amount');
-      if (amt > state.reserve) return toast('Insufficient Reserve');
-      // Just confirm intent; actual allocation happens via manual deploy to funds
+      const avail = totalAvailable();
+      if (amt > avail + 0.01) return toast(`Insufficient cash. Available: ${fmt(avail)} (Regular+Dip)`);
       toast(`Ready to deploy ₹${amt.toLocaleString('en-IN')}. Use “Allocate to Fund” below.`);
       document.getElementById('deploy-fund-amount').value = amt;
     }
@@ -1363,7 +1464,8 @@
       const fundId = document.getElementById('deploy-fund-select').value;
       const amt = parseFloat(document.getElementById('deploy-fund-amount').value);
       if (!fundId || !amt || amt <= 0) return toast('Select fund & amount');
-      if (amt > state.reserve + 0.01) return toast('Insufficient Reserve');
+      const avail = totalAvailable();
+      if (amt > avail + 0.01) return toast(`Insufficient cash. Available: ${fmt(avail)}`);
       const f = state.funds.find(x => x.id === fundId);
       if (!f) return;
       const nav = f.lastNav || f.avgNav || 1;
@@ -1371,14 +1473,21 @@
       const prevCost = (f.avgNav || 0) * (f.units || 0);
       f.units = (f.units || 0) + units;
       f.avgNav = (prevCost + amt) / f.units;
-      state.reserve -= amt;
+      // Draw from Dip Reserve first, then Regular
+      let left = amt;
+      const fromDip = Math.min(state.reserve || 0, left);
+      state.reserve = (state.reserve || 0) - fromDip;
+      left -= fromDip;
+      if (left > 0) {
+        state.regular = Math.max(0, (state.regular || 0) - left);
+      }
       state.transactions.push({
         id: 'tx' + Date.now() + '_dep',
         date: new Date().toISOString(),
         type: 'deploy',
         amount: amt,
         fundId: f.id,
-        note: `Deployed from Reserve @ ₹${nav.toFixed(2)}`
+        note: `Deployed (Dip ₹${fromDip.toFixed(0)} + Regular ₹${(amt-fromDip).toFixed(0)}) @ ₹${nav.toFixed(2)}`
       });
       state.activity.unshift({
         date: new Date().toISOString(),
@@ -1406,6 +1515,10 @@
       pnlEl.textContent = fmt(pnl) + ' (' + fmtPct(invested ? (pnl / invested) * 100 : 0) + ')';
       pnlEl.className = 'text-xl font-bold ' + (pnl >= 0 ? 'positive' : 'negative');
       document.getElementById('dash-reserve').textContent = fmt(state.reserve);
+      const regEl = document.getElementById('dash-regular');
+      if (regEl) regEl.textContent = fmt(state.regular);
+      const avEl = document.getElementById('dash-available');
+      if (avEl) avEl.textContent = fmt(totalAvailable());
 
       // Nifty
       document.getElementById('nifty-current').textContent = state.nifty.current ? state.nifty.current.toLocaleString('en-IN') : '—';
@@ -1463,8 +1576,8 @@
           ? ((f.lastNav - f.monthHigh) / f.monthHigh) * 100
           : 0;
         const isDip = dropFromHigh <= -thr;
-        const alertAmt = isDip && state.reserve > 0
-          ? Math.min(state.reserve, (f.alloc / 100) * (state.sip.amount || state.reserve))
+        const alertAmt = isDip && totalAvailable() > 0
+          ? Math.min(totalAvailable(), (f.alloc / 100) * (state.sip.amount || totalAvailable()))
           : 0;
 
         return `
@@ -1515,9 +1628,9 @@
             <p class="font-medium text-amber-300">⚡ DIP ALERT — below −${thr}% threshold</p>
             <p class="text-xs text-slate-300 mt-1">
               Current is ${Math.abs(dropFromHigh).toFixed(2)}% under month high.
-              ${state.reserve > 0
-                ? `Consider allocating from Reserve (₹${state.reserve.toLocaleString('en-IN')}). Suggested for this fund (~${f.alloc}%): <b>₹${Math.round(alertAmt).toLocaleString('en-IN')}</b>`
-                : 'Add money to Reserve or run SIP, then deploy from Deploy tab.'}
+              ${totalAvailable() > 0
+                ? `Consider deploying from available cash (₹${totalAvailable().toLocaleString('en-IN')}). Suggested (~${f.alloc}%): <b>₹${Math.round(alertAmt).toLocaleString('en-IN')}</b>`
+                : 'Add to Regular / Dip Reserve, then deploy from Deploy tab.'}
             </p>
             <button onclick="switchTab('deploy')" class="mt-2 text-xs bg-amber-500 text-black px-3 py-1 rounded font-medium">Go to Deploy →</button>
           </div>` : ''}
@@ -1539,6 +1652,10 @@
     }
 
     function renderDeploy() {
+      const cashEl = document.getElementById('deploy-cash-status');
+      if (cashEl) {
+        cashEl.innerHTML = `Available: <b class="text-cyan-400">${fmt(totalAvailable())}</b> = Regular ${fmt(state.regular)} + Dip ${fmt(state.reserve)}`;
+      }
       const drop = niftyDropPct();
       const status = document.getElementById('deploy-nifty-status');
       if (!state.nifty.monthHigh) {
@@ -1557,8 +1674,8 @@
         const dropF = f.monthHigh && f.lastNav ? ((f.lastNav - f.monthHigh) / f.monthHigh) * 100 : 0;
         const thr = f.dipThreshold || 5;
         const hit = dropF <= -thr;
-        const suggest = hit && state.reserve > 0
-          ? Math.round(Math.min(state.reserve, (f.alloc / 100) * (state.sip.amount || state.reserve)))
+        const suggest = hit && totalAvailable() > 0
+          ? Math.round(Math.min(totalAvailable(), (f.alloc / 100) * (state.sip.amount || totalAvailable())))
           : 0;
         return `<div class="p-2.5 rounded-lg ${hit ? 'bg-amber-900/30 border border-amber-500/30' : 'bg-slate-800/50'}">
           <div class="flex justify-between items-center">
@@ -1641,7 +1758,7 @@
         tipsArr.push(`• Total target allocation is ${totalAlloc.toFixed(1)}%. Consider rebalancing to 100%.`);
       }
       if (state.reserve > 0) {
-        tipsArr.push(`• You have ${fmt(state.reserve)} in Reserve. Use dip triggers to deploy systematically.`);
+        tipsArr.push(`• Cash available ${fmt(totalAvailable())} (Regular ${fmt(state.regular)} + Dip ${fmt(state.reserve)}). Use dip signals to deploy.`);
       }
       const under = state.funds.filter(f => {
         const cost = (f.units || 0) * (f.avgNav || 0);
@@ -1822,12 +1939,15 @@
         // Side effects for new entries
         if (type === 'reserve') {
           state.reserve = (state.reserve || 0) + amount;
+        } else if (type === 'manual') {
+          state.regular = (state.regular || 0) + amount;
         } else if (type === 'deploy') {
-          if (amount > (state.reserve || 0) + 0.01) {
-            // still allow but warn
-            toast('Warning: amount > current Reserve');
-          }
-          state.reserve = Math.max(0, (state.reserve || 0) - amount);
+          if (amount > totalAvailable() + 0.01) toast('Warning: amount > available cash');
+          let left = amount;
+          const fromDip = Math.min(state.reserve || 0, left);
+          state.reserve -= fromDip;
+          left -= fromDip;
+          if (left > 0) state.regular = Math.max(0, (state.regular || 0) - left);
           if (fundId) {
             const f = state.funds.find(x => x.id === fundId);
             if (f) {
@@ -1860,9 +1980,11 @@
       // Reverse simple reserve impact
       if (t.type === 'reserve') {
         state.reserve = Math.max(0, (state.reserve || 0) - (t.amount || 0));
+      } else if (t.type === 'manual') {
+        state.regular = Math.max(0, (state.regular || 0) - (t.amount || 0));
       } else if (t.type === 'deploy') {
+        // Return cash to Dip Reserve by default
         state.reserve = (state.reserve || 0) + (t.amount || 0);
-        // Note: we do not auto-reverse units on fund (too risky without full lot tracking)
       }
       state.transactions = state.transactions.filter(x => x.id !== id);
       save();
